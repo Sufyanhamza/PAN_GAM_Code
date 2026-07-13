@@ -14,7 +14,8 @@ PAN_GAM_Code/
 ├── generate_sample_data.py
 ├── generate_main_figures.py
 ├── generate_robustness_figure.py
-└── generate_supplementary_example_figures.py
+├── generate_supplementary_example_figures.py
+└── requirements.txt
 ```
 
 ## File descriptions
@@ -23,7 +24,7 @@ PAN_GAM_Code/
 
 Main Pan-GAM analysis pipeline.
 
-The current version of `pan_gam.py` integrates all analyses reported in the manuscript, including the species-stratified Pan-GAM workflow, discovery-only CTU construction, leakage-free external validation, epsilon-threshold sensitivity analysis, functional CTU auditing, curated-driver recovery, runtime profiling, bootstrap confidence intervals, and optional baseline-result comparison.
+The current version of `pan_gam.py` implements the core Pan-GAM workflow and the principal analyses, including species-stratified CTU construction, drug-specific association testing, leakage-controlled external validation, runtime profiling, bootstrap confidence intervals, discovery-only epsilon-threshold sensitivity analysis, functional CTU auditing, curated-driver recovery, and optional comparison with externally generated baseline results. External tools and supplementary analyses, including pyseer, DBGWAS, SNP-LMM, SHAP, deep-neural-network benchmarking, and selected robustness experiments, must be executed separately where applicable.
 
 This script performs the core workflow, including:
 
@@ -73,6 +74,16 @@ This script creates a small, reproducible test dataset that can be used to verif
 
 The generated dataset is intended only for software testing and demonstration. It must not be interpreted as real clinical evidence or used to reproduce the manuscript's reported biological results.
 
+### `requirements.txt`
+
+Python dependency list for the Pan-GAM pipeline and supporting scripts.
+
+Install all listed packages with:
+
+```bash
+pip install -r requirements.txt
+```
+
 ### `generate_main_figures.py`
 
 Main figure-generation script.
@@ -120,6 +131,7 @@ scikit-learn
 joblib
 matplotlib
 seaborn
+psutil
 ```
 
 ## Installation
@@ -134,7 +146,7 @@ conda activate pangam
 Install the required packages:
 
 ```bash
-pip install numpy pandas scipy statsmodels scikit-learn joblib matplotlib seaborn
+pip install numpy pandas scipy statsmodels scikit-learn joblib matplotlib seaborn psutil
 ```
 
 Alternatively, create a `requirements.txt` file containing:
@@ -148,6 +160,7 @@ scikit-learn
 joblib
 matplotlib
 seaborn
+psutil
 ```
 
 and install all dependencies with:
@@ -207,6 +220,9 @@ data/roary_sa.rtab
 Each `.rtab` file should contain gene clusters as rows and isolate identifiers as columns. Values should indicate gene presence or absence.
 
 The isolate identifiers in the Roary matrices must match the `isolate_id` values in the metadata file.
+
+**Important leakage-control requirement:** the gene-family columns used by Pan-GAM must be defined from the discovery cohort only. External isolates must then be annotated and projected onto this fixed discovery-derived gene catalogue before the combined input matrix is prepared. Validation-specific gene families must not be introduced as new feature columns, and the external cohort must not be used to recalculate Jaccard distances or redefine CTU membership.
+
 
 ## Running the main Pan-GAM pipeline
 
@@ -344,6 +360,9 @@ python pan_gam.py \
 
 A successful synthetic run confirms that the software workflow executes and produces output files. It does not validate the manuscript's real-data results, which require the original clinical dataset.
 
+The optional `--baseline-results` argument imports baseline metrics that were generated separately. The repository does not internally reimplement pyseer, DBGWAS, SNP-LMM, SHAP, or deep-neural-network analyses.
+
+
 ## Generating figures
 
 To generate main manuscript-style figures:
@@ -388,10 +407,11 @@ Users can apply the Pan-GAM workflow to their own datasets by providing compatib
 
 This repository provides the Pan-GAM source code, including:
 
-- the main analysis pipeline, including all analyses reported in the manuscript;
+- the main Pan-GAM workflow and principal reviewer-requested analyses implemented in `pan_gam.py`;
 - Jaccard-threshold sensitivity analysis;
 - synthetic demonstration code;
 - the `generate_sample_data.py` testing-data generator;
+- the `requirements.txt` dependency specification;
 - main and supplementary figure-generation scripts.
 
 ## Citation
