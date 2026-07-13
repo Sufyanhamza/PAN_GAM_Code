@@ -1,0 +1,137 @@
+from __future__ import annotations
+
+from pathlib import Path
+import numpy as np
+import pandas as pd
+
+SEED = 7
+OUT = Path(__file__).resolve().parent / "sample_data"
+OUT.mkdir(parents=True, exist_ok=True)
+
+
+def phenotype_rows(species: str, cohort: str, start: int, counts: list[tuple[int, int, int]]) -> pd.DataFrame:
+    """Create deterministic phenotype blocks: (DrugA, DrugB, count)."""
+    rows = []
+    n = start
+    for drug_a, drug_b, count in counts:
+        for _ in range(count):
+            rows.append({
+                "isolate_id": f"{species}_{cohort}_{n:03d}",
+                "species": species,
+                "cohort": cohort,
+                "DrugA": drug_a,
+                "DrugB": drug_b,
+            })
+            n += 1
+    return pd.DataFrame(rows)
+
+
+def build_species(species: str, rng: np.random.Generator) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    # Discovery: 120 isolates; external: 40 isolates.
+    discovery = phenotype_rows(
+        species, "discovery", 1,
+        [(1, 0, 40), (0, 1, 40), (1, 1, 20), (0, 0, 20)],
+    )
+    external = phenotype_rows(
+        species, "external", 1,
+        [(1, 0, 12), (0, 1, 12), (1, 1, 8), (0, 0, 8)],
+    )
+    meta = pd.concat([discovery, external], ignore_index=True)
+    n = len(meta)
+
+    a = meta["DrugA"].to_numpy(dtype=np.uint8)
+    b = meta["DrugB"].to_numpy(dtype=np.uint8)
+
+    genes: dict[str, np.ndarray] = {}
+    # Perfectly co-transferred DrugA cassette: one driver plus two passengers.
+    genes[f"{species}_drugA_driver"] = a.copy()
+    genes[f"{species}_drugA_regulator"] = a.copy()
+    genes[f"{species}_drugA_passenger"] = a.copy()
+
+    # Perfectly co-transferred DrugB cassette.
+    genes[f"{species}_drugB_driver"] = b.copy()
+    genes[f"{species}_drugB_mobility"] = b.copy()
+    genes[f"{species}_drugB_passenger"] = b.copy()
+
+    # MDR-associated but not perfectly drug-specific feature.
+    genes[f"{species}_multidrug_background"] = ((a + b) > 0).astype(np.uint8)
+
+    # A near-collinear feature with 2% deterministic dropout to exercise epsilon=0.05.
+    near_a = a.copy()
+    a_idx = np.flatnonzero(a == 1)
+    if len(a_idx) >= 4:
+        near_a[a_idx[:3]] = 0
+    genes[f"{species}_drugA_near_collinear"] = near_a
+
+    # Independent noise genes with varied prevalence.
+    for j, prevalence in enumerate(np.linspace(0.08, 0.72, 18), start=1):
+        genes[f"{species}_noise_{j:02d}"] = rng.binomial(1, prevalence, size=n).astype(np.uint8)
+
+    # Two lineage-like features, independent of phenotype by construction.
+    lineage = np.zeros(n, dtype=np.uint8)
+    lineage[::2] = 1
+    genes[f"{species}_lineage_even"] = lineage
+    genes[f"{species}_lineage_odd"] = 1 - lineage
+
+    matrix = pd.DataFrame(genes, index=meta["isolate_id"]).T
+    matrix.index.name = "Gene"
+
+    annotation_rows = []
+    for gene in matrix.index:
+        category = "unclassified"
+        target = ""
+        if gene.endswith("drugA_driver"):
+            category, target = "target_concordant_amr", "DrugA"
+        elif gene.endswith("drugA_regulator"):
+            category, target = "resistance_regulatory", "DrugA"
+        elif gene.endswith("drugA_passenger") or gene.endswith("drugA_near_collinear"):
+            category, target = "same_mge_passenger", ""
+        elif gene.endswith("drugB_driver"):
+            category, target = "target_concordant_amr", "DrugB"
+        elif gene.endswith("drugB_mobility"):
+            category, target = "mobility_plasmid_backbone", "DrugB"
+        elif gene.endswith("drugB_passenger"):
+            category, target = "same_mge_passenger", ""
+        annotation_rows.append({"species": species, "gene": gene, "category": category, "target_drug": target})
+
+    curated = pd.DataFrame([
+        {"species": species, "gene": f"{species}_drugA_driver", "drug": "DrugA"},
+        {"species": species, "gene": f"{species}_drugB_driver", "drug": "DrugB"},
+    ])
+    return meta, matrix, pd.DataFrame(annotation_rows), curated
+
+
+def main() -> None:
+    rng = np.random.default_rng(SEED)
+    all_meta = []
+    all_ann = []
+    all_curated = []
+
+    for species in ["Kp", "Sa"]:
+        meta, matrix, ann, curated = build_species(species, rng)
+        all_meta.append(meta)
+        all_ann.append(ann)
+        all_curated.append(curated)
+        matrix.to_csv(OUT / f"{species}_gene_presence_absence.Rtab", sep="\t")
+
+    pd.concat(all_meta, ignore_index=True).to_csv(OUT / "metadata.csv", index=False)
+    pd.concat(all_ann, ignore_index=True).to_csv(OUT / "gene_annotations.csv", index=False)
+    pd.concat(all_curated, ignore_index=True).to_csv(OUT / "curated_drivers.csv", index=False)
+
+    baseline = pd.DataFrame([
+        {"method": method, "drug": drug, "sensitivity": sens, "specificity": spec, "ppv": ppv, "f1": f1, "auc": auc, "accuracy": acc}
+        for method, sens, spec, ppv, f1, auc, acc in [
+            ("SyntheticBaseline", 0.80, 0.82, 0.78, 0.79, 0.84, 0.81),
+        ]
+        for drug in ["DrugA", "DrugB"]
+    ])
+    baseline.to_csv(OUT / "baseline_results.csv", index=False)
+
+    print(f"Synthetic Pan-GAM test data written to: {OUT}")
+    print("Files:")
+    for path in sorted(OUT.iterdir()):
+        print(f"  - {path.name}")
+
+
+if __name__ == "__main__":
+    main()
