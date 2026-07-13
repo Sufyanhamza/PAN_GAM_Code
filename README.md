@@ -11,6 +11,7 @@ PAN_GAM_Code/
 ├── pan_gam.py
 ├── epsilon_scan.py
 ├── pangam_synthetic_demo.py.py
+├── generate_sample_data.py
 ├── generate_main_figures.py
 ├── generate_robustness_figure.py
 └── generate_supplementary_example_figures.py
@@ -21,6 +22,8 @@ PAN_GAM_Code/
 ### `pan_gam.py`
 
 Main Pan-GAM analysis pipeline.
+
+The current version of `pan_gam.py` integrates all analyses reported in the manuscript, including the species-stratified Pan-GAM workflow, discovery-only CTU construction, leakage-free external validation, epsilon-threshold sensitivity analysis, functional CTU auditing, curated-driver recovery, runtime profiling, bootstrap confidence intervals, and optional baseline-result comparison.
 
 This script performs the core workflow, including:
 
@@ -54,6 +57,21 @@ Synthetic demonstration script.
 This script provides a class-based demonstration of the Pan-GAM framework using simulated data. It includes modular implementations of phenotypic partitioning, HGT-driven CTU construction, hypergeometric association testing, and significant-hit filtering.
 
 This file is intended for demonstration and educational purposes. It is not required for reproducing the main Pan-GAM analysis pipeline.
+
+
+### `generate_sample_data.py`
+
+Synthetic sample-data generation script.
+
+This script creates a small, reproducible test dataset that can be used to verify that the updated `pan_gam.py` pipeline executes correctly before real clinical data are available. It generates:
+
+- species-specific synthetic Roary-style gene presence/absence matrices for `Kp` and `Sa`;
+- a metadata file containing discovery and external cohorts;
+- two binary resistance phenotypes (`DrugA` and `DrugB`);
+- synthetic driver, regulatory, mobility, passenger, lineage-like, and background genes;
+- optional gene-annotation, curated-driver, and baseline-result files.
+
+The generated dataset is intended only for software testing and demonstration. It must not be interpreted as real clinical evidence or used to reproduce the manuscript's reported biological results.
 
 ### `generate_main_figures.py`
 
@@ -288,6 +306,44 @@ python pangam_synthetic_demo.py.py
 
 This script generates simulated gene presence/absence data and simulated resistance phenotypes, then runs the Pan-GAM workflow to demonstrate CTU construction and association testing.
 
+## Generating the synthetic sample dataset
+
+To create the synthetic test files, run:
+
+```bash
+python generate_sample_data.py
+```
+
+This command creates a `sample_data/` directory containing:
+
+```text
+sample_data/metadata.csv
+sample_data/Kp_gene_presence_absence.Rtab
+sample_data/Sa_gene_presence_absence.Rtab
+sample_data/gene_annotations.csv
+sample_data/curated_drivers.csv
+sample_data/baseline_results.csv
+```
+
+The generated files can then be supplied to the updated `pan_gam.py` pipeline. For example:
+
+```bash
+python pan_gam.py \
+  --metadata sample_data/metadata.csv \
+  --kp-rtab sample_data/Kp_gene_presence_absence.Rtab \
+  --sa-rtab sample_data/Sa_gene_presence_absence.Rtab \
+  --drugs DrugA,DrugB \
+  --outdir test_results \
+  --epsilon 0.05 \
+  --gene-annotations sample_data/gene_annotations.csv \
+  --curated-drivers sample_data/curated_drivers.csv \
+  --baseline-results sample_data/baseline_results.csv \
+  --n-bootstrap 50 \
+  --no-tune-gbdt
+```
+
+A successful synthetic run confirms that the software workflow executes and produces output files. It does not validate the manuscript's real-data results, which require the original clinical dataset.
+
 ## Generating figures
 
 To generate main manuscript-style figures:
@@ -332,9 +388,10 @@ Users can apply the Pan-GAM workflow to their own datasets by providing compatib
 
 This repository provides the Pan-GAM source code, including:
 
-- the main analysis pipeline;
+- the main analysis pipeline, including all analyses reported in the manuscript;
 - Jaccard-threshold sensitivity analysis;
 - synthetic demonstration code;
+- the `generate_sample_data.py` testing-data generator;
 - main and supplementary figure-generation scripts.
 
 ## Citation
